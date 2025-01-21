@@ -10,3 +10,9 @@ all:
 clean:
 	make -C $(KDIR) M=$(PWD) clean
 	rm -rf .cache
+
+insmod:
+	sudo insmod source/vtfs.ko
+
+rmmod:
+	sudo rmmod vtfs
