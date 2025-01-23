@@ -30,9 +30,15 @@ struct inode* vtfs_get_inode(
   int i_ino
 );
 
+struct dentry* vtfs_lookup(
+  struct inode* parent_inode,  // родительская нода
+  struct dentry* child_dentry, // объект, к которому мы пытаемся получить доступ
+  unsigned int flag            // неиспользуемое значение
+);
 
 
 
+// structs 
 
 struct file_system_type vtfs_fs_type = {
   .name = "vtfs",
@@ -40,6 +46,13 @@ struct file_system_type vtfs_fs_type = {
   .kill_sb = vtfs_kill_sb,
 };
 
+struct inode_operations vtfs_inode_ops = {
+  .lookup = vtfs_lookup,
+};
+
+
+
+// code
 
 static int __init vtfs_init(void) {
   LOG("VTFS joined the kernel\n");
@@ -107,9 +120,23 @@ struct inode* vtfs_get_inode(
   }
 
   inode->i_ino = i_ino;
+  
+  inode->i_op = &vtfs_inode_ops;
+  
   return inode;
 }
 
+
+
+// step 2
+
+struct dentry* vtfs_lookup(
+  struct inode* parent_inode,  // родительская нода
+  struct dentry* child_dentry, // объект, к которому мы пытаемся получить доступ
+  unsigned int flag            // неиспользуемое значение
+){
+  return NULL;
+}
 
 
 
