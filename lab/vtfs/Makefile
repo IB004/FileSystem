@@ -19,6 +19,7 @@ rmmod:
 
 mount:
 	sudo mount -t vtfs "TODO" /mnt/vt
+	sudo chmod 777 /mnt/vt
 
 unmount:
 	sudo umount /mnt/vt

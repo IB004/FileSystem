@@ -36,6 +36,8 @@ struct dentry* vtfs_lookup(
   unsigned int flag            // неиспользуемое значение
 );
 
+int vtfs_iterate(struct file* filp, struct dir_context* ctx);
+
 
 
 // structs 
@@ -48,6 +50,10 @@ struct file_system_type vtfs_fs_type = {
 
 struct inode_operations vtfs_inode_ops = {
   .lookup = vtfs_lookup,
+};
+
+struct file_operations vtfs_dir_ops = {
+  .iterate_shared = vtfs_iterate,
 };
 
 
@@ -122,13 +128,13 @@ struct inode* vtfs_get_inode(
   inode->i_ino = i_ino;
   
   inode->i_op = &vtfs_inode_ops;
-  
+  inode->i_fop = &vtfs_dir_ops;
   return inode;
 }
 
 
 
-// step 2
+// step 3
 
 struct dentry* vtfs_lookup(
   struct inode* parent_inode,  // родительская нода
@@ -138,5 +144,19 @@ struct dentry* vtfs_lookup(
   return NULL;
 }
 
+int vtfs_iterate(struct file* filp, struct dir_context* ctx) {
+  char fsname[10];
+  struct dentry* dentry = filp->f_path.dentry;
+  struct inode* inode   = dentry->d_inode;
+  ino_t ino             = inode->i_ino;
+  
+  while (ctx->pos < inode->i_size) {
+    if (!dir_emit(ctx, ".", 1, ino, DT_DIR))
+      return 0;
+    ctx->pos++;
+  }
+  
+  return inode->i_size;
+}
 
 
