@@ -145,18 +145,25 @@ struct dentry* vtfs_lookup(
 }
 
 int vtfs_iterate(struct file* filp, struct dir_context* ctx) {
-  char fsname[10];
   struct dentry* dentry = filp->f_path.dentry;
   struct inode* inode   = dentry->d_inode;
-  ino_t ino             = inode->i_ino;
   
-  while (ctx->pos < inode->i_size) {
-    if (!dir_emit(ctx, ".", 1, ino, DT_DIR))
+  printk(KERN_INFO "vtfs_iterate.\n");
+  
+  if (ctx->pos == 0) {
+    if (!dir_emit(ctx, ".", 1, inode->i_ino, DT_DIR))
       return 0;
     ctx->pos++;
+    return 1;
+    }
+  if (ctx->pos == 1) {
+    if (!dir_emit(ctx, "..", 2, dentry->d_parent->d_inode->i_ino, DT_DIR))
+      return 0;
+    ctx->pos++;
+    return 1;
   }
   
-  return inode->i_size;
+  return 0;
 }
 
 
