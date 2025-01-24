@@ -38,7 +38,7 @@ struct dentry* vtfs_mount( struct file_system_type* fs_type, int flags, const ch
 int vtfs_fill_super(struct super_block *sb, void *data, int silent);
 struct inode* vtfs_get_inode(struct super_block* sb, const struct inode* dir, umode_t mode, int i_ino);
 struct dentry* vtfs_lookup(struct inode* dir,    struct dentry* entry, unsigned int flag);
-int vtfs_iterate(struct file* filp, struct dir_context* ctx);
+int vtfs_iterate(struct file* file, struct dir_context* ctx);
 int vtfs_create(struct mnt_idmap*,struct inode *dir, struct dentry *entry, umode_t mode, bool b);
 
 // structs 
@@ -74,7 +74,7 @@ static int __init vtfs_init(void) {
 static void __exit vtfs_exit(void) {
   LOG("VTFS left the kernel\n");
   if(unregister_filesystem(&vtfs_fs_type) != 0)
-  	LOG("Can't unregister file system");
+  LOG("Can't unregister file system");
 }
 
 module_init(vtfs_init);
@@ -153,26 +153,30 @@ struct dentry* vtfs_lookup(
   return NULL;
 }
 
-int vtfs_iterate(struct file* filp, struct dir_context* ctx) {
-  struct dentry* dentry = filp->f_path.dentry;
+
+int vtfs_iterate(struct file* file, struct dir_context* ctx) {
+  struct dentry* dentry = file->f_path.dentry;
   struct inode* inode   = dentry->d_inode;
   
-  LOG("vtfs_iterate.\n");
+  LOG("vtfs_iterate: start\n");
   
-  if (ctx->pos == 0) {
-    if (!dir_emit(ctx, ".", 1, inode->i_ino, DT_DIR))
-      return 0;
-    ctx->pos++;
-    return 1;
-    }
-  if (ctx->pos == 1) {
-    if (!dir_emit(ctx, "..", 2, dentry->d_parent->d_inode->i_ino, DT_DIR))
-      return 0;
-    ctx->pos++;
-    return 1;
+  if(!dir_emit_dots(file, ctx)){
+  	LOG("vtfs_iterate: dir_emit_dots faild.\n");
+    return -1;
   }
   
-  return 0;
+  for(struct filenode* node = nodes; node != NULL; node = node->next){
+  	LOG("vtfs_iterate: %s %p\n", node->name, node->next);
+  	if (!dir_emit(ctx, node->name, strlen(node->name), dentry->d_parent->d_inode->i_ino, DT_REG)){
+  		LOG("vtfs_iterate: dir_emit faild.\n");
+  		return -2;
+  	}
+  	ctx->pos++;
+  }
+  
+  LOG("vtfs_iterate: stop\n");
+  
+  return ctx->pos;
 }
 
 
