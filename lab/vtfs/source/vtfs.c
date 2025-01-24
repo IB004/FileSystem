@@ -137,10 +137,12 @@ struct inode* vtfs_get_inode(
 // step 3
 
 struct dentry* vtfs_lookup(
-  struct inode* parent_inode,  // родительская нода
-  struct dentry* child_dentry, // объект, к которому мы пытаемся получить доступ
-  unsigned int flag            // неиспользуемое значение
+  struct inode*  dir,   // родительская нода
+  struct dentry* entry, // объект, к которому мы пытаемся получить доступ
+  unsigned int flag     // неиспользуемое значение
 ){
+	printk(KERN_INFO "vtfs_lookup: %s, dir.ino: %lu\n", entry->d_name.name, dir->i_ino);
+	d_add(entry, NULL);
   return NULL;
 }
 
