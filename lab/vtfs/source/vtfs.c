@@ -37,10 +37,10 @@ void vtfs_kill_sb(struct super_block* sb);
 struct dentry* vtfs_mount( struct file_system_type* fs_type, int flags, const char* token, void* data);
 int vtfs_fill_super(struct super_block *sb, void *data, int silent);
 struct inode* vtfs_get_inode(struct super_block* sb, const struct inode* dir, umode_t mode, int i_ino);
-struct dentry* vtfs_lookup(struct inode* dir,    struct dentry* entry, unsigned int flag);
+struct dentry* vtfs_lookup(struct inode* dir, struct dentry* entry, unsigned int flag);
 int vtfs_iterate(struct file* file, struct dir_context* ctx);
 int vtfs_create(struct mnt_idmap*,struct inode *dir, struct dentry *entry, umode_t mode, bool b);
-
+int vtfs_unlink(struct inode* dir, struct dentry* entry);
 // structs 
 
 struct file_system_type vtfs_fs_type = {
@@ -52,6 +52,7 @@ struct file_system_type vtfs_fs_type = {
 struct inode_operations vtfs_inode_ops = {
   .lookup = vtfs_lookup,
   .create = vtfs_create,
+  .unlink = vtfs_unlink,
 };
 
 struct file_operations vtfs_dir_ops = {
@@ -164,6 +165,9 @@ int vtfs_iterate(struct file* file, struct dir_context* ctx) {
   	LOG("vtfs_iterate: dir_emit_dots faild.\n");
     return -1;
   }
+  if (ctx->pos > 2) {
+    return ctx->pos;
+  }
   
   for(struct filenode* node = nodes; node != NULL; node = node->next){
   	LOG("vtfs_iterate: %s %p\n", node->name, node->next);
@@ -213,4 +217,9 @@ int vtfs_create(
   strcpy(filenode->name, name);
   
   return 0;
+}
+
+
+int vtfs_unlink(struct inode* dir, struct dentry* entry){
+	return 0;
 }
