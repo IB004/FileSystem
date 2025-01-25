@@ -89,6 +89,9 @@ int vtfs_create(struct mnt_idmap*, struct inode *dir, struct dentry *entry, umod
 int vtfs_unlink(struct inode* dir, struct dentry* entry);
 int vtfs_mkdir (struct mnt_idmap*, struct inode *,struct dentry *, umode_t);
 int vtfs_rmdir (struct inode *,struct dentry *);
+ssize_t vtfs_read (struct file *, char __user *, size_t, loff_t *);
+ssize_t vtfs_write (struct file *, const char __user *, size_t, loff_t *);
+int (vtfs_link) (struct dentry *,struct inode *,struct dentry *);
 
 // structs 
 
@@ -104,10 +107,13 @@ struct inode_operations vtfs_inode_ops = {
   .unlink = vtfs_unlink,
   .mkdir  = vtfs_mkdir,
   .rmdir  = vtfs_rmdir,
+  .link = vtfs_link,
 };
 
 struct file_operations vtfs_dir_ops = {
   .iterate_shared = vtfs_iterate,
+  .read = vtfs_read,
+  .write = vtfs_write,
 };
 
 
@@ -356,3 +362,38 @@ int vtfs_rmdir(struct inode* dir, struct dentry* entry){
 	return delete_file(dir, entry);
 }
 
+
+
+// step 8
+
+ssize_t vtfs_read(
+  struct file *file, 
+  char *buffer,      
+  size_t len,        
+  loff_t *offset     
+){
+	LOG("vtfs_read: file: %lu.\n", file->f_inode->i_ino);
+	return -1;
+}
+
+ssize_t vtfs_write(
+  struct file *file, 
+  const char *buffer, 
+  size_t len, 
+  loff_t *offset
+){
+	LOG("vtfs_write: file: %lu.\n", file->f_inode->i_ino);
+	return -1;
+}
+
+
+// step 9
+
+int vtfs_link(
+  struct dentry *old_dentry, 
+  struct inode *parent_dir, 
+  struct dentry *new_dentry
+){
+	LOG("vtfs_link: parent: %lu old: %s new: %s.\n", parent_dir->i_ino, old_dentry->d_name.name, new_dentry->d_name.name);
+	return -1;
+}
