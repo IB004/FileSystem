@@ -30,19 +30,23 @@ struct filenode {
 
 struct filenode* nodes = NULL;
 
+struct idata* create_idata(void){	
+	struct idata* idata = kmalloc(sizeof(struct idata), GFP_KERNEL);
+		if (!idata){
+		LOG("create_idata: kmalloc failed.\n");
+		return NULL;
+	} 
+	memset(idata->data, 0, FILE_DATA);
+	return idata;
+}
+
 struct filenode* create_filenode(void){
 	struct filenode* node = kmalloc(sizeof(struct filenode), GFP_KERNEL);
 	if (!node){
 		LOG("create_node: kmalloc filenode failed.\n");
 		return NULL;
 	} 
-	struct idata* idata = kmalloc(sizeof(struct idata), GFP_KERNEL);
-		if (!idata){
-		LOG("create_node: kmalloc idata failed.\n");
-		return NULL;
-	} 
-	memset(idata->data, 0, FILE_DATA);
-	node->idata = idata;
+
 	node->next = nodes;
 	nodes = node;
 	return node;
@@ -127,10 +131,6 @@ struct file_operations vtfs_dir_ops = {
 };
 
 
-
-
-
-
 struct filenode* create_file(
 	struct inode *dir, 
   struct dentry *entry, 
@@ -146,6 +146,12 @@ struct filenode* create_file(
   
   struct filenode *filenode = create_filenode();
   if (!filenode) return 0;
+  
+  struct idata* idata = create_idata();
+	if (!idata){
+		return 0;
+	} 
+	filenode->idata = idata;
   
   d_add(entry, inode);
 
@@ -460,6 +466,24 @@ int vtfs_link(
   struct inode *parent_dir, 
   struct dentry *new_dentry
 ){
-	LOG("vtfs_link: parent: %lu old: %s new: %s.\n", parent_dir->i_ino, old_dentry->d_name.name, new_dentry->d_name.name);
-	return -1;
+	LOG("vtfs_link: parent: %lu old: %s old_inode: %lu, new: %s.\n", parent_dir->i_ino, old_dentry->d_name.name, old_dentry->d_inode->i_ino, new_dentry->d_name.name);
+	
+	struct filenode* node = get_filenode_by_ino(old_dentry->d_inode->i_ino);
+  if (!node) return -1;
+
+  
+  struct filenode *new_node = create_filenode();
+  if (!new_node) return -2;
+  
+  new_node->idata = node->idata;
+  
+  d_add(new_dentry, new_node->idata->inode);
+
+
+  strcpy(new_node->name, new_dentry->d_name.name);
+  new_node->parent_ino = parent_dir->i_ino;
+  
+  inc_nlink(node->idata->inode);
+
+	return 0;
 }
