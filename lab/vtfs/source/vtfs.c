@@ -433,8 +433,11 @@ ssize_t vtfs_write(
 		write_len = FILE_DATA - *offset;
 	}
 	
-	int copy_res = copy_from_user(buffer, node->idata->data + *offset, write_len);
-	if (copy_res != write_len) {
+	int copy_res = copy_from_user(node->idata->data + *offset, buffer, write_len);
+	
+	LOG("vtfs_write: data: %s.\n", node->idata->data);
+	
+	if (copy_res != 0) {
 		LOG("vtfs_write: copy_from_user: %d.\n", copy_res);
   	return -3;
   }
