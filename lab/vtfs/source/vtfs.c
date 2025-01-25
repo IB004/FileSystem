@@ -66,7 +66,6 @@ int delete_filenode(struct filenode* node){
 }
 
 
-
 // function prototypes
 void vtfs_kill_sb(struct super_block* sb);
 struct dentry* vtfs_mount( struct file_system_type* fs_type, int flags, const char* token, void* data);
@@ -74,8 +73,11 @@ int vtfs_fill_super(struct super_block *sb, void *data, int silent);
 struct inode* vtfs_get_inode(struct super_block* sb, const struct inode* dir, umode_t mode, int i_ino);
 struct dentry* vtfs_lookup(struct inode* dir, struct dentry* entry, unsigned int flag);
 int vtfs_iterate(struct file* file, struct dir_context* ctx);
-int vtfs_create(struct mnt_idmap*,struct inode *dir, struct dentry *entry, umode_t mode, bool b);
+int vtfs_create(struct mnt_idmap*, struct inode *dir, struct dentry *entry, umode_t mode, bool b);
 int vtfs_unlink(struct inode* dir, struct dentry* entry);
+int vtfs_mkdir (struct mnt_idmap*, struct inode *,struct dentry *, umode_t);
+int vtfs_rmdir (struct inode *,struct dentry *);
+
 // structs 
 
 struct file_system_type vtfs_fs_type = {
@@ -88,11 +90,46 @@ struct inode_operations vtfs_inode_ops = {
   .lookup = vtfs_lookup,
   .create = vtfs_create,
   .unlink = vtfs_unlink,
+  .mkdir  = vtfs_mkdir,
+  .rmdir  = vtfs_rmdir,
 };
 
 struct file_operations vtfs_dir_ops = {
   .iterate_shared = vtfs_iterate,
 };
+
+
+
+
+
+
+struct filenode* create_file(
+	struct inode *dir, 
+  struct dentry *entry, 
+  umode_t mode
+  ){
+	struct inode *inode = vtfs_get_inode(
+        dir->i_sb, 
+        dir, 
+        mode, 
+        inode_counter++
+  );
+  if (!inode) return 0;
+  
+  struct filenode *filenode = create_filenode();
+  if (!filenode) return 0;
+  
+  inode->i_op = &vtfs_inode_ops;
+  inode->i_fop = NULL;
+  d_add(entry, inode);
+
+  filenode->inode = inode;
+  strcpy(filenode->name, entry->d_name.name);
+  
+  return filenode;
+}
+
+
 
 
 
@@ -206,7 +243,14 @@ int vtfs_iterate(struct file* file, struct dir_context* ctx) {
   
   for(struct filenode* node = nodes; node != NULL; node = node->next){
   	LOG("vtfs_iterate: %s %p\n", node->name, node->next);
-  	if (!dir_emit(ctx, node->name, strlen(node->name), dentry->d_parent->d_inode->i_ino, DT_REG)){
+  	
+  	unsigned int type = DT_UNKNOWN;
+  	if (S_ISDIR(node->inode->i_mode))
+      type = DT_DIR;
+    if (S_ISREG(node->inode->i_mode)) 
+      type = DT_REG;
+    
+  	if (!dir_emit(ctx, node->name, strlen(node->name), dentry->d_parent->d_inode->i_ino, type)){
   		LOG("vtfs_iterate: dir_emit faild.\n");
   		return -2;
   	}
@@ -222,7 +266,7 @@ int vtfs_iterate(struct file* file, struct dir_context* ctx) {
 // step 5
 
 int vtfs_create(
-  struct mnt_idmap*,
+  struct mnt_idmap* idmap,
   struct inode *dir, 
   struct dentry *entry, 
   umode_t mode, 
@@ -235,20 +279,11 @@ int vtfs_create(
 	struct inode *inode = vtfs_get_inode(
         dir->i_sb, 
         dir, 
-        mode | S_IFREG | S_IRWXUGO, 
+        mode | S_IFREG, 
         inode_counter++
   );
-  if (!inode) return -1;
-  
-  struct filenode *filenode = create_filenode();
-  if (!filenode) return -2;
-  
-  inode->i_op = &vtfs_inode_ops;
-  inode->i_fop = NULL;
-  d_add(entry, inode);
-
-  filenode->inode = inode;
-  strcpy(filenode->name, name);
+  struct filenode *node = create_file(dir, entry, mode | S_IFREG);
+  if (!node) return -1;
   
   return 0;
 }
@@ -276,3 +311,30 @@ int vtfs_unlink(struct inode* dir, struct dentry* entry){
 	
 	return 0;
 }
+
+
+
+// step 7
+
+int vtfs_mkdir(
+  struct mnt_idmap* idmap,
+  struct inode *dir, 
+  struct dentry *entry, 
+  umode_t mode
+) {
+	ino_t root = dir->i_ino;
+  const char *name = entry->d_name.name;
+	LOG("vtfs_mkdir: root: %lu, name: %s.\n", root, name);
+	
+	return 0;
+}
+
+
+int vtfs_rmdir(struct inode* dir, struct dentry* entry){
+	ino_t root = dir->i_ino;
+  const char *name = entry->d_name.name;
+	LOG("vtfs_rmdir: root: %lu, name: %s.\n", root, name);
+	
+	return 0;
+}
+
