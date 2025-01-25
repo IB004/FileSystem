@@ -41,6 +41,7 @@ struct filenode* create_filenode(void){
 		LOG("create_node: kmalloc idata failed.\n");
 		return NULL;
 	} 
+	memset(idata->data, 0, FILE_DATA);
 	node->idata = idata;
 	node->next = nodes;
 	nodes = node;
@@ -381,14 +382,14 @@ ssize_t vtfs_read(
   size_t len,        
   loff_t *offset     
 ){
-	LOG("vtfs_read: file: %lu.\n", file->f_inode->i_ino);
+  LOG("vtfs_read: file: %lu, len: %lu, offset: %lld.\n", file->f_inode->i_ino, len, *offset);
 	
 	struct filenode* node = get_filenode_by_ino(file->f_inode->i_ino);
 	if (!node) return -1;
 	
 	if (*offset >= node->idata->inode->i_size && node->idata->inode->i_size > 0){
-		LOG("vtfs_read: offset: %lu  i_size: %lu.\n", *offset, node->idata->inode->i_size);
-		return -2;
+		LOG("vtfs_read: offset: %lld  i_size: %lu.\n", *offset, node->idata->inode->i_size);
+		return 0;
 	}
 	
 	size_t read_len = len;
@@ -396,11 +397,15 @@ ssize_t vtfs_read(
 		read_len = node->idata->inode->i_size - *offset;
 	}
 	
-	if (copy_to_user(buffer, node->idata->data + *offset, read_len) != 0) {
-		LOG("vtfs_read: copy_to_user: not all bytes.\n");
+	int copy_res = copy_to_user(buffer, node->idata->data + *offset, read_len);
+	if (copy_res != 0) {
+		LOG("vtfs_read: copy_to_user: %d.\n", copy_res);
   	return -3;
   }
   *offset += len;
+  
+  LOG("vtfs_read: OK file: %lu, read: %d, offset: %lu, i_size: %lu.\n", file->f_inode->i_ino, read_len, *offset, node->idata->inode->i_size);
+  
   return len;
 }
 
@@ -410,8 +415,38 @@ ssize_t vtfs_write(
   size_t len, 
   loff_t *offset
 ){
-	LOG("vtfs_write: file: %lu.\n", file->f_inode->i_ino);
-	return -1;
+	LOG("vtfs_write: file: %lu, len: %lu, offset: %lld.\n", file->f_inode->i_ino, len, *offset);
+	
+	struct filenode* node = get_filenode_by_ino(file->f_inode->i_ino);
+	if (!node) return -1;
+	
+	if (*offset >= FILE_DATA){
+		LOG("vtfs_write: offset: %lu.\n", *offset);
+		return -2;
+	}
+	if (*offset == 0) {
+    node->idata->inode->i_size = 0;
+  }
+	
+	size_t write_len = len;
+	if (*offset + len > FILE_DATA){
+		write_len = FILE_DATA - *offset;
+	}
+	
+	int copy_res = copy_from_user(buffer, node->idata->data + *offset, write_len);
+	if (copy_res != write_len) {
+		LOG("vtfs_write: copy_from_user: %d.\n", copy_res);
+  	return -3;
+  }
+  *offset += len;
+  
+  if (*offset > node->idata->inode->i_size) {
+    node->idata->inode->i_size = *offset;
+  }
+  
+  LOG("vtfs_write: OK file: %lu, write: %d, offset: %lu, i_size: %lu.\n", file->f_inode->i_ino, write_len, *offset, node->idata->inode->i_size);
+
+  return len;
 }
 
 
