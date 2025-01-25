@@ -13,6 +13,9 @@ MODULE_DESCRIPTION("A simple FS kernel module");
 
 #define FILE_NAME_LENGTH 128
 
+
+unsigned long	inode_counter = 1000;
+
 struct filenode {
 	struct filenode* next;
 	struct inode* inode;
@@ -31,6 +34,38 @@ struct filenode* create_filenode(void){
 	nodes = node;
 	return node;
 }
+
+struct filenode* get_filenode(const char* name){
+	for(struct filenode* cur = nodes; cur != NULL; cur = cur->next){
+		if (strcmp(cur->name, name) == 0)
+			return cur;
+	}
+	LOG("get_filenode: not found %s.\n", name);
+	return 0;
+}
+
+int delete_filenode(struct filenode* node){
+	bool found = false;
+	struct filenode* prev = nodes;
+	for(struct filenode* cur = nodes; cur != NULL; cur = cur->next){
+		if (cur == node){
+		  if (cur != nodes) {
+		  	prev->next = cur->next;
+		  } else {
+		  	nodes = cur->next;
+		  }
+			found = true;
+		}
+		prev = cur;
+	}
+	if (!found){
+		LOG("delete_filenode: not found.\n");
+		return -1;
+	}
+	return 0;
+}
+
+
 
 // function prototypes
 void vtfs_kill_sb(struct super_block* sb);
@@ -104,7 +139,7 @@ struct dentry* vtfs_mount(
 
 
 int vtfs_fill_super(struct super_block *sb, void *data, int silent) {
-  struct inode* inode = vtfs_get_inode(sb, NULL, S_IFDIR, 1000);
+  struct inode* inode = vtfs_get_inode(sb, NULL, S_IFDIR, inode_counter++);
 
   sb->s_root = d_make_root(inode);
   if (sb->s_root == NULL) {
@@ -193,7 +228,6 @@ int vtfs_create(
   umode_t mode, 
   bool b
 ) {
-
 	ino_t root = dir->i_ino;
   const char *name = entry->d_name.name;
 	LOG("vtfs_create: root: %lu, name: %s.\n", root, name);
@@ -202,7 +236,7 @@ int vtfs_create(
         dir->i_sb, 
         dir, 
         mode | S_IFREG | S_IRWXUGO, 
-        101
+        inode_counter++
   );
   if (!inode) return -1;
   
@@ -221,5 +255,24 @@ int vtfs_create(
 
 
 int vtfs_unlink(struct inode* dir, struct dentry* entry){
+	ino_t root = dir->i_ino;
+  const char *name = entry->d_name.name;
+	LOG("vtfs_unlink: root: %lu, name: %s.\n", root, name);
+	
+  struct filenode* node = get_filenode(name);
+  if (!node) return -1;
+ 	
+ 	if (node->inode != entry->d_inode){
+ 		LOG("vtfs_unlink: node: %lu != entry: %lu.\n", node->inode->i_ino, entry->d_inode->i_ino);
+ 		return -2;
+ 	}
+  
+	drop_nlink(entry->d_inode);
+	if (entry->d_inode->i_nlink == 0) {
+  	if (delete_filenode(node) != 0) return -3;
+  	kfree(node);
+	}
+	d_drop(entry);
+	
 	return 0;
 }
