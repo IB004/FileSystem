@@ -14,10 +14,11 @@ MODULE_DESCRIPTION("A simple FS kernel module");
 #define FILE_NAME_LENGTH 128
 
 
-unsigned long	inode_counter = 1000;
+ino_t	inode_counter = 1000;
 
 struct filenode {
 	struct filenode* next;
+	ino_t parent_ino;
 	struct inode* inode;
 	char name[FILE_NAME_LENGTH];
 };
@@ -35,9 +36,9 @@ struct filenode* create_filenode(void){
 	return node;
 }
 
-struct filenode* get_filenode(const char* name){
+struct filenode* get_filenode(const char* name, ino_t parent_ino){
 	for(struct filenode* cur = nodes; cur != NULL; cur = cur->next){
-		if (strcmp(cur->name, name) == 0)
+		if ((cur->parent_ino == parent_ino) && (strcmp(cur->name, name) == 0))
 			return cur;
 	}
 	LOG("get_filenode: not found %s.\n", name);
@@ -125,10 +126,30 @@ struct filenode* create_file(
 
   filenode->inode = inode;
   strcpy(filenode->name, entry->d_name.name);
+  filenode->parent_ino = dir->i_ino;
   
   return filenode;
 }
 
+
+struct filenode* delete_file(struct inode * dir,struct dentry * entry){
+	ino_t root = dir->i_ino;
+  const char *name = entry->d_name.name;
+	struct filenode* node = get_filenode(name, root);
+  if (!node) return -1;
+ 	
+ 	if (node->inode != entry->d_inode){
+ 		LOG("delete_file: node: %lu != entry: %lu.\n", node->inode->i_ino, entry->d_inode->i_ino);
+ 		return -2;
+ 	}
+  
+	drop_nlink(entry->d_inode);
+	if (delete_filenode(node) != 0) return -3;
+  kfree(node);
+	d_drop(entry);
+	
+	return 0;
+}
 
 
 
@@ -177,6 +198,7 @@ struct dentry* vtfs_mount(
 
 int vtfs_fill_super(struct super_block *sb, void *data, int silent) {
   struct inode* inode = vtfs_get_inode(sb, NULL, S_IFDIR, inode_counter++);
+  inode->i_fop = &vtfs_dir_ops;
 
   sb->s_root = d_make_root(inode);
   if (sb->s_root == NULL) {
@@ -207,8 +229,7 @@ struct inode* vtfs_get_inode(
   inode->i_ino = i_ino;
   
   inode->i_op = &vtfs_inode_ops;
-  inode->i_fop = &vtfs_dir_ops;
-  
+ 
   return inode;
 }
 
@@ -242,6 +263,8 @@ int vtfs_iterate(struct file* file, struct dir_context* ctx) {
   }
   
   for(struct filenode* node = nodes; node != NULL; node = node->next){
+  	if  (node->parent_ino != file->f_inode->i_ino) continue;
+  
   	LOG("vtfs_iterate: %s %p\n", node->name, node->next);
   	
   	unsigned int type = DT_UNKNOWN;
@@ -276,12 +299,6 @@ int vtfs_create(
   const char *name = entry->d_name.name;
 	LOG("vtfs_create: root: %lu, name: %s.\n", root, name);
 	
-	struct inode *inode = vtfs_get_inode(
-        dir->i_sb, 
-        dir, 
-        mode | S_IFREG, 
-        inode_counter++
-  );
   struct filenode *node = create_file(dir, entry, mode | S_IFREG);
   if (!node) return -1;
   
@@ -294,22 +311,7 @@ int vtfs_unlink(struct inode* dir, struct dentry* entry){
   const char *name = entry->d_name.name;
 	LOG("vtfs_unlink: root: %lu, name: %s.\n", root, name);
 	
-  struct filenode* node = get_filenode(name);
-  if (!node) return -1;
- 	
- 	if (node->inode != entry->d_inode){
- 		LOG("vtfs_unlink: node: %lu != entry: %lu.\n", node->inode->i_ino, entry->d_inode->i_ino);
- 		return -2;
- 	}
-  
-	drop_nlink(entry->d_inode);
-	if (entry->d_inode->i_nlink == 0) {
-  	if (delete_filenode(node) != 0) return -3;
-  	kfree(node);
-	}
-	d_drop(entry);
-	
-	return 0;
+  return delete_file(dir, entry);
 }
 
 
@@ -326,6 +328,11 @@ int vtfs_mkdir(
   const char *name = entry->d_name.name;
 	LOG("vtfs_mkdir: root: %lu, name: %s.\n", root, name);
 	
+	struct filenode *node = create_file(dir, entry, mode | S_IFDIR);
+  if (!node) return -1;
+  
+  node->inode->i_fop = &vtfs_dir_ops;
+	
 	return 0;
 }
 
@@ -335,6 +342,6 @@ int vtfs_rmdir(struct inode* dir, struct dentry* entry){
   const char *name = entry->d_name.name;
 	LOG("vtfs_rmdir: root: %lu, name: %s.\n", root, name);
 	
-	return 0;
+	return delete_file(dir, entry);
 }
 
