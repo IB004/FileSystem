@@ -56,6 +56,15 @@ struct filenode* get_filenode(const char* name, ino_t parent_ino){
 	return 0;
 }
 
+struct filenode* get_filenode_by_ino(const ino_t ino){
+	for(struct filenode* cur = nodes; cur != NULL; cur = cur->next){
+		if (cur->idata->inode->i_ino == ino)
+			return cur;
+	}
+	LOG("get_filenode: not found %lu.\n", ino);
+	return 0;
+}
+
 int delete_filenode(struct filenode* node){
 	bool found = false;
 	struct filenode* prev = nodes;
@@ -373,7 +382,26 @@ ssize_t vtfs_read(
   loff_t *offset     
 ){
 	LOG("vtfs_read: file: %lu.\n", file->f_inode->i_ino);
-	return -1;
+	
+	struct filenode* node = get_filenode_by_ino(file->f_inode->i_ino);
+	if (!node) return -1;
+	
+	if (*offset >= node->idata->inode->i_size && node->idata->inode->i_size > 0){
+		LOG("vtfs_read: offset: %lu  i_size: %lu.\n", *offset, node->idata->inode->i_size);
+		return -2;
+	}
+	
+	size_t read_len = len;
+	if (*offset + len > node->idata->inode->i_size){
+		read_len = node->idata->inode->i_size - *offset;
+	}
+	
+	if (copy_to_user(buffer, node->idata->data + *offset, read_len) != 0) {
+		LOG("vtfs_read: copy_to_user: not all bytes.\n");
+  	return -3;
+  }
+  *offset += len;
+  return len;
 }
 
 ssize_t vtfs_write(
